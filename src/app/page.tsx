@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import type { UserRole } from '@/types/database';
 
 export default async function Home() {
   const supabase = await createClient();
@@ -14,7 +15,7 @@ export default async function Home() {
     .from('users')
     .select('role')
     .eq('id', user.id)
-    .single();
+    .single<{ role: UserRole }>();
 
   if (userData?.role === 'admin') {
     redirect('/admin');
@@ -27,3 +28,4 @@ export default async function Home() {
   // 기본값: 로그인 페이지
   redirect('/login');
 }
+
