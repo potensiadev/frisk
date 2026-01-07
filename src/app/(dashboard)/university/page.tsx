@@ -9,30 +9,27 @@ export default async function UniversityDashboard() {
     const { data: userData } = await supabase
         .from('users')
         .select('university_id')
-        .eq('id', user?.id)
-        .single();
+        .eq('id', user?.id || '')
+        .single<{ university_id: string | null }>();
 
     const universityId = userData?.university_id;
 
     // 통계 데이터 조회
-    const [
-        { count: studentsCount },
-        { count: absencesThisMonth },
-        { data: riskStudents },
-    ] = await Promise.all([
-        supabase
-            .from('students')
-            .select('*', { count: 'exact', head: true })
-            .eq('university_id', universityId)
-            .is('deleted_at', null)
-            .eq('status', 'enrolled'),
-        supabase
-            .from('absences')
-            .select('*, students!inner(*)', { count: 'exact', head: true })
-            .eq('students.university_id', universityId)
-            .gte('absence_date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
-        supabase.rpc('get_risk_students_count', { p_university_id: universityId }).single(),
-    ]);
+    const { count: studentsCount } = await supabase
+        .from('students')
+        .select('*', { count: 'exact', head: true })
+        .eq('university_id', universityId || '')
+        .is('deleted_at', null)
+        .eq('status', 'enrolled');
+
+    const { count: absencesThisMonth } = await supabase
+        .from('absences')
+        .select('*, students!inner(*)', { count: 'exact', head: true })
+        .eq('students.university_id', universityId || '')
+        .gte('absence_date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString());
+
+    // 위험군 학생 수 (추후 구현)
+    const riskStudentsCount = 0;
 
     const stats = [
         {
@@ -59,7 +56,7 @@ export default async function UniversityDashboard() {
         },
         {
             name: '위험군 학생',
-            value: riskStudents?.count || 0,
+            value: riskStudentsCount,
             href: '/university/students?filter=risk',
             icon: (
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

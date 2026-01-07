@@ -5,18 +5,19 @@ export default async function AgencyDashboard() {
     const supabase = await createClient();
 
     // 통계 데이터 조회
-    const [
-        { count: studentsCount },
-        { count: absencesThisMonth },
-        { data: pendingCheckins },
-    ] = await Promise.all([
-        supabase.from('students').select('*', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'enrolled'),
-        supabase
-            .from('absences')
-            .select('*', { count: 'exact', head: true })
-            .gte('absence_date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
-        supabase.rpc('get_pending_checkin_count').single(),
-    ]);
+    const { count: studentsCount } = await supabase
+        .from('students')
+        .select('*', { count: 'exact', head: true })
+        .is('deleted_at', null)
+        .eq('status', 'enrolled');
+
+    const { count: absencesThisMonth } = await supabase
+        .from('absences')
+        .select('*', { count: 'exact', head: true })
+        .gte('absence_date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString());
+
+    // 점검 대기 수 (3개월 이상 점검 안 한 학생 - 추후 구현)
+    const pendingCheckinsCount = 0;
 
     const stats = [
         {
@@ -43,7 +44,7 @@ export default async function AgencyDashboard() {
         },
         {
             name: '점검 대기',
-            value: pendingCheckins?.count || 0,
+            value: pendingCheckinsCount,
             href: '/agency/checkins',
             icon: (
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
