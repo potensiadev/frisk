@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function LoginPage() {
+function LoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [email, setEmail] = useState('');
@@ -166,3 +166,18 @@ export default function LoginPage() {
     );
 }
 
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="w-full max-w-md">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 animate-pulse">
+                    <div className="h-16 w-16 bg-gray-200 dark:bg-gray-700 rounded-2xl mx-auto mb-4"></div>
+                    <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded mx-auto w-48 mb-2"></div>
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded mx-auto w-32"></div>
+                </div>
+            </div>
+        }>
+            <LoginForm />
+        </Suspense>
+    );
+}
