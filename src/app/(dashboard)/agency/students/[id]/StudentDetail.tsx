@@ -1,6 +1,10 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Student, University, Absence, QuarterlyCheckin, StudentProgram, StudentStatus, AbsenceReason } from '@/types/database';
+import { FileUpload } from '@/components/forms/FileUpload';
+import { getSignedUrl } from '@/lib/storage/upload';
 
 interface StudentWithUniversity extends Student {
   universities: University;
@@ -50,8 +54,53 @@ const reasonLabels: Record<AbsenceReason, string> = {
 };
 
 export function StudentDetail({ student, absenceCount, recentAbsences, lastCheckin }: StudentDetailProps) {
+  const router = useRouter();
   const statusInfo = statusLabels[student.status];
   const isRiskStudent = absenceCount >= 3;
+
+  const [consentFileUrl, setConsentFileUrl] = useState<string | null>(null);
+  const [isUploadingConsent, setIsUploadingConsent] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+
+  // Get signed URL for existing consent file
+  useEffect(() => {
+    async function fetchSignedUrl() {
+      if (student.consent_file_url) {
+        const result = await getSignedUrl('consent-files', student.consent_file_url);
+        if (result.url) {
+          setConsentFileUrl(result.url);
+        }
+      }
+    }
+    fetchSignedUrl();
+  }, [student.consent_file_url]);
+
+  // Handle consent file upload
+  const handleConsentUpload = async (path: string) => {
+    setIsUploadingConsent(true);
+    setUploadError(null);
+    setUploadSuccess(false);
+
+    try {
+      const response = await fetch(`/api/students/${student.id}/consent`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ consent_file_url: path }),
+      });
+
+      if (!response.ok) {
+        throw new Error('동의서 저장에 실패했습니다');
+      }
+
+      setUploadSuccess(true);
+      router.refresh();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : '오류가 발생했습니다');
+    } finally {
+      setIsUploadingConsent(false);
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -231,20 +280,48 @@ export function StudentDetail({ student, absenceCount, recentAbsences, lastCheck
         {/* Consent File */}
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">개인정보 동의서</h3>
+
           {student.consent_file_url ? (
-            <a
-              href={student.consent_file_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 dark:text-blue-400"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              파일 보기
-            </a>
-          ) : (
-            <p className="text-amber-500">미등록</p>
+            <div className="space-y-3">
+              <a
+                href={consentFileUrl || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 ${!consentFileUrl ? 'opacity-50 pointer-events-none' : ''}`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {consentFileUrl ? '파일 보기' : '로딩 중...'}
+              </a>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                새 파일을 업로드하면 기존 파일이 대체됩니다.
+              </p>
+            </div>
+          ) : null}
+
+          <div className={student.consent_file_url ? 'mt-4' : ''}>
+            <FileUpload
+              bucket="consent-files"
+              folder={student.id}
+              label={student.consent_file_url ? '새 동의서 업로드' : undefined}
+              helperText="스캔된 동의서 이미지 또는 PDF"
+              onUploadComplete={handleConsentUpload}
+              onUploadError={(err) => setUploadError(err)}
+              disabled={isUploadingConsent}
+            />
+          </div>
+
+          {uploadSuccess && (
+            <p className="mt-2 text-sm text-green-600 dark:text-green-400">
+              동의서가 저장되었습니다.
+            </p>
+          )}
+
+          {uploadError && (
+            <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+              {uploadError}
+            </p>
           )}
         </div>
       </div>

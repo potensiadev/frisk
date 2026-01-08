@@ -211,3 +211,84 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     );
   }
 }
+
+// PATCH - Update consent file URL (for client-side uploads)
+export async function PATCH(request: NextRequest, context: RouteContext) {
+  try {
+    const { id: studentId } = await context.params;
+    const supabase = await createClient();
+
+    // Check auth
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 });
+    }
+
+    // Check user role (only agency and admin can update)
+    const { data: userData } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single<{ role: string }>();
+
+    if (!userData || !['admin', 'nepal_agency'].includes(userData.role)) {
+      return NextResponse.json({ error: '권한이 없습니다' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { consent_file_url } = body;
+
+    if (!consent_file_url || typeof consent_file_url !== 'string') {
+      return NextResponse.json(
+        { error: '동의서 파일 경로가 필요합니다' },
+        { status: 400 }
+      );
+    }
+
+    // Check if student exists
+    const { data: studentData, error: studentError } = await supabase
+      .from('students')
+      .select('id, consent_file_url')
+      .eq('id', studentId)
+      .is('deleted_at', null)
+      .single<{ id: string; consent_file_url: string | null }>();
+
+    if (studentError || !studentData) {
+      return NextResponse.json({ error: '학생을 찾을 수 없습니다' }, { status: 404 });
+    }
+
+    // Delete old file if exists (cleanup)
+    if (studentData.consent_file_url) {
+      const oldPath = studentData.consent_file_url;
+      await supabase.storage.from('consent-files').remove([oldPath]);
+    }
+
+    // Update student record with new file path
+    const { error: updateError } = await (supabase
+      .from('students') as any)
+      .update({
+        consent_file_url,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', studentId);
+
+    if (updateError) {
+      console.error('Update error:', updateError);
+      return NextResponse.json(
+        { error: '학생 정보 업데이트에 실패했습니다' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: '동의서가 저장되었습니다',
+    });
+  } catch (error) {
+    console.error('Consent PATCH error:', error);
+    return NextResponse.json(
+      { error: '서버 오류가 발생했습니다' },
+      { status: 500 }
+    );
+  }
+}

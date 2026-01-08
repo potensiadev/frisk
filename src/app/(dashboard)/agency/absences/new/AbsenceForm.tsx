@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
+import { FileUpload } from '@/components/forms/FileUpload';
 import type { AbsenceReason, Student, University } from '@/types/database';
 
 interface StudentWithUniversity extends Student {
@@ -37,6 +38,7 @@ export function AbsenceForm({ students }: AbsenceFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [absenceFilePath, setAbsenceFilePath] = useState<string | null>(null);
 
   // Update studentId when preselected changes
   useEffect(() => {
@@ -72,6 +74,7 @@ export function AbsenceForm({ students }: AbsenceFormProps) {
           reason,
           note: note.trim() || null,
           send_notification: sendNotification,
+          file_path: absenceFilePath,
         }),
       });
 
@@ -184,6 +187,29 @@ export function AbsenceForm({ students }: AbsenceFormProps) {
                 {note.length}/500
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* 증빙 파일 업로드 */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">증빙 서류 (선택)</h2>
+          <FileUpload
+            bucket="absence-files"
+            folder={studentId || 'temp'}
+            helperText="진단서 등 증빙 서류를 업로드하세요"
+            onUploadComplete={(path) => setAbsenceFilePath(path)}
+            disabled={!studentId}
+          />
+          {!studentId && (
+            <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+              먼저 학생을 선택해주세요
+            </p>
+          )}
+          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <p className="text-sm text-blue-700 dark:text-blue-400">
+              <strong>안내:</strong> 증빙 파일은 UUID로 저장되어 개인정보가 보호됩니다.
+              대학교 담당자는 시스템을 통해서만 파일을 열람할 수 있습니다.
+            </p>
           </div>
         </div>
 
