@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { logLoginSuccess, logLoginFailure } from '@/lib/audit';
-import { rateLimiters } from '@/lib/rate-limit';
+import { rateLimiters, getIP } from '@/lib/rate-limit';
 import type { UserRole } from '@/types/database';
 
 export async function POST(request: NextRequest) {
     try {
-        const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+        const ipAddress = getIP(request);
 
         // Rate limit check
         const rateLimitResult = rateLimiters.login(ipAddress);

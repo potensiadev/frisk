@@ -79,6 +79,23 @@ export function checkRateLimit(key: string, config: RateLimitConfig): RateLimitR
   };
 }
 
+// Helper to safely get IP address
+export function getIP(req: Request | any): string { // any for NextRequest compatibility
+  const xForwardedFor = req.headers.get('x-forwarded-for');
+  const xRealIp = req.headers.get('x-real-ip');
+
+  // Platform specific headers (Vercel)
+  if (xRealIp) return xRealIp;
+
+  if (xForwardedFor) {
+    const list = xForwardedFor.split(',');
+    return list[0]?.trim() || 'unknown';
+  }
+
+  // Fallback but prioritize headers which are set by the platform proxy
+  return 'unknown';
+}
+
 // Pre-configured rate limiters for common use cases
 export const rateLimiters = {
   /** Login attempts: 5 requests per minute */
@@ -90,6 +107,12 @@ export const rateLimiters = {
   /** API requests: 100 requests per minute */
   api: (key: string) => checkRateLimit(`api:${key}`, {
     maxRequests: 100,
+    windowMs: 60 * 1000, // 1 minute
+  }),
+
+  /** Sensitive API (Uploads/Emails): 10 requests per minute */
+  sensitive: (key: string) => checkRateLimit(`sensitive:${key}`, {
+    maxRequests: 10,
     windowMs: 60 * 1000, // 1 minute
   }),
 

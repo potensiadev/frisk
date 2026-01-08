@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getUserOrThrow, requireRole, AuthError } from '@/lib/auth-checks';
+import { logUpdate } from '@/lib/audit';
+import { getIP } from '@/lib/rate-limit';
 
 interface CheckinRequest {
     student_id: string;
@@ -20,21 +23,16 @@ export async function POST(request: NextRequest) {
     try {
         const supabase = await createClient();
 
-        // Check auth
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        // Check permission
-        const { data: userData } = await supabase
-            .from('users')
-            .select('role')
-            .eq('id', user.id)
-            .single<{ role: string }>();
-
-        if (!userData || !['admin', 'nepal_agency'].includes(userData.role)) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        // Check auth using unified helper
+        let user;
+        try {
+            user = await getUserOrThrow(supabase);
+            requireRole(user, ['admin', 'nepal_agency']);
+        } catch (error) {
+            if (error instanceof AuthError) {
+                return NextResponse.json({ error: error.message }, { status: error.statusCode });
+            }
+            throw error;
         }
 
         const body: CheckinRequest = await request.json();
@@ -141,6 +139,14 @@ export async function POST(request: NextRequest) {
                 })
                 .eq('id', existing_checkin_id);
 
+            // Log update
+            await logUpdate(supabase, user.id, 'checkin', existing_checkin_id, {
+                check_in_date: today,
+                phone_verified,
+                address_verified,
+                email_verified
+            }, getIP(request));
+
             if (checkinError) {
                 console.error('Checkin update error:', checkinError);
                 return NextResponse.json(
@@ -188,10 +194,15 @@ export async function GET(request: NextRequest) {
     try {
         const supabase = await createClient();
 
-        // Check auth
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        // Check auth using unified helper
+        let user;
+        try {
+            user = await getUserOrThrow(supabase);
+        } catch (error) {
+            if (error instanceof AuthError) {
+                return NextResponse.json({ error: error.message }, { status: error.statusCode });
+            }
+            throw error;
         }
 
         const searchParams = request.nextUrl.searchParams;
@@ -204,11 +215,21 @@ export async function GET(request: NextRequest) {
         const quarterEndDate = new Date(year, quarterStartMonth + 3, 0).toISOString().split('T')[0];
 
         // Get check-in stats
-        const { data: checkins, error } = await supabase
+        // Use !inner join to filter by student's university if needed
+        let checkinsQuery = supabase
             .from('quarterly_checkins')
-            .select('id, student_id, check_in_date, phone_verified, address_verified, email_verified')
+            .select('id, student_id, check_in_date, phone_verified, address_verified, email_verified, students!inner(university_id)')
             .gte('check_in_date', quarterStartDate)
             .lte('check_in_date', quarterEndDate);
+
+        if (user.role === 'university') {
+            if (!user.university_id) {
+                return NextResponse.json({ error: 'University ID not found for user' }, { status: 400 });
+            }
+            checkinsQuery = checkinsQuery.eq('students.university_id', user.university_id);
+        }
+
+        const { data: checkins, error } = await checkinsQuery;
 
         if (error) {
             console.error('Checkin fetch error:', error);
@@ -216,11 +237,17 @@ export async function GET(request: NextRequest) {
         }
 
         // Get total enrolled students
-        const { count: totalStudents } = await supabase
+        let studentsQuery = supabase
             .from('students')
             .select('id', { count: 'exact', head: true })
             .eq('status', 'enrolled')
             .is('deleted_at', null);
+
+        if (user.role === 'university' && user.university_id) {
+            studentsQuery = studentsQuery.eq('university_id', user.university_id);
+        }
+
+        const { count: totalStudents } = await studentsQuery;
 
         return NextResponse.json({
             year,

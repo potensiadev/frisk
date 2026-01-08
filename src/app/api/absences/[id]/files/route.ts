@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { rateLimiters, getIP } from '@/lib/rate-limit';
+import { getUserOrThrow, requireRole, requireUniversityScope, AuthError } from '@/lib/auth-checks';
+import { logUpload, logDelete } from '@/lib/audit';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
@@ -12,23 +15,29 @@ interface RouteContext {
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { id: absenceId } = await context.params;
-    const supabase = await createClient();
 
-    // Check auth
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 });
+    // Rate limit check
+    const ip = getIP(request);
+    const limitResult = rateLimiters.sensitive(ip);
+    if (!limitResult.success) {
+      return NextResponse.json(
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
+        { status: 429 }
+      );
     }
 
-    // Check user role (only agency and admin can upload)
-    const { data: userData } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single<{ role: string }>();
+    const supabase = await createClient();
 
-    if (!userData || !['admin', 'nepal_agency'].includes(userData.role)) {
-      return NextResponse.json({ error: '권한이 없습니다' }, { status: 403 });
+    // Check auth using unified helper
+    let user;
+    try {
+      user = await getUserOrThrow(supabase);
+      requireRole(user, ['admin', 'nepal_agency']);
+    } catch (error) {
+      if (error instanceof AuthError) {
+        return NextResponse.json({ error: error.message }, { status: error.statusCode });
+      }
+      throw error;
     }
 
     // Check if absence exists
@@ -111,6 +120,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
+    // Audit Log
+    await logUpload(supabase, user.id, 'absence_file', fileName, absenceId, ip);
+
     return NextResponse.json({
       message: '파일이 업로드되었습니다',
       file: absenceFile,
@@ -130,10 +142,34 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const { id: absenceId } = await context.params;
     const supabase = await createClient();
 
-    // Check auth
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 });
+    // Check auth using unified helper
+    let user;
+    try {
+      user = await getUserOrThrow(supabase);
+    } catch (error) {
+      if (error instanceof AuthError) {
+        return NextResponse.json({ error: error.message }, { status: error.statusCode });
+      }
+      throw error;
+    }
+
+    // Check ownership if university user
+    if (user.role === 'university') {
+      const { data: absence } = await supabase
+        .from('absences')
+        .select('student_id, students!inner(university_id)')
+        .eq('id', absenceId)
+        .single();
+
+      const studentUnivId = (absence as any)?.students?.university_id;
+
+      try {
+        requireUniversityScope(user, studentUnivId);
+      } catch (error) {
+        if (error instanceof AuthError) {
+          return NextResponse.json({ error: error.message }, { status: error.statusCode });
+        }
+      }
     }
 
     // Get files
@@ -186,21 +222,16 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const { id: absenceId } = await context.params;
     const supabase = await createClient();
 
-    // Check auth
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 });
-    }
-
-    // Check user role (only agency and admin can delete)
-    const { data: userData } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single<{ role: string }>();
-
-    if (!userData || !['admin', 'nepal_agency'].includes(userData.role)) {
-      return NextResponse.json({ error: '권한이 없습니다' }, { status: 403 });
+    // Check auth using unified helper
+    let user;
+    try {
+      user = await getUserOrThrow(supabase);
+      requireRole(user, ['admin', 'nepal_agency']);
+    } catch (error) {
+      if (error instanceof AuthError) {
+        return NextResponse.json({ error: error.message }, { status: error.statusCode });
+      }
+      throw error;
     }
 
     // Get file_id from query params
@@ -242,6 +273,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       console.error('Delete error:', deleteError);
       return NextResponse.json({ error: '파일 삭제에 실패했습니다' }, { status: 500 });
     }
+
+    // Audit Log
+    await logDelete(supabase, user.id, 'file', fileId, getIP(request));
 
     return NextResponse.json({ message: '파일이 삭제되었습니다' });
   } catch (error) {
