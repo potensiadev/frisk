@@ -8,7 +8,7 @@ export type StudentStatus = 'enrolled' | 'graduated' | 'completed' | 'withdrawn'
 
 export type AbsenceReason = 'illness' | 'personal' | 'other';
 
-export type AuditActionType = 'login' | 'download' | 'logout';
+export type AuditActionType = 'login' | 'login_failed' | 'logout' | 'download' | 'create' | 'update' | 'delete';
 
 export interface User {
   id: string;
