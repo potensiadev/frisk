@@ -1,0 +1,314 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/Modal';
+import type { Absence, Student, University, AbsenceReason } from '@/types/database';
+
+interface AbsenceWithStudent extends Absence {
+  students: Student & {
+    universities: University;
+  };
+}
+
+interface AbsenceListProps {
+  absences: AbsenceWithStudent[];
+  universities: { id: string; name: string }[];
+}
+
+const reasonLabels: Record<AbsenceReason, { label: string; color: string }> = {
+  illness: {
+    label: '질병',
+    color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  },
+  personal: {
+    label: '개인 사정',
+    color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  },
+  other: {
+    label: '기타',
+    color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+  },
+};
+
+export function AbsenceList({ absences: initialAbsences, universities }: AbsenceListProps) {
+  const router = useRouter();
+  const [absences, setAbsences] = useState(initialAbsences);
+  const [search, setSearch] = useState('');
+  const [universityFilter, setUniversityFilter] = useState('');
+  const [reasonFilter, setReasonFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Filter absences
+  const filteredAbsences = absences.filter((absence) => {
+    const student = absence.students;
+
+    const matchesSearch =
+      !search ||
+      student.name.toLowerCase().includes(search.toLowerCase()) ||
+      student.student_no.toLowerCase().includes(search.toLowerCase());
+
+    const matchesUniversity =
+      !universityFilter || student.university_id === universityFilter;
+
+    const matchesReason = !reasonFilter || absence.reason === reasonFilter;
+
+    const matchesStartDate =
+      !startDate || absence.absence_date >= startDate;
+
+    const matchesEndDate =
+      !endDate || absence.absence_date <= endDate;
+
+    return matchesSearch && matchesUniversity && matchesReason && matchesStartDate && matchesEndDate;
+  });
+
+  const handleDelete = async () => {
+    if (!deletingId) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/absences/${deletingId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || '삭제에 실패했습니다');
+      }
+
+      setAbsences(absences.filter((a) => a.id !== deletingId));
+      setShowDeleteModal(false);
+      setDeletingId(null);
+      router.refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '오류가 발생했습니다');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const openDeleteModal = (id: string) => {
+    setDeletingId(id);
+    setShowDeleteModal(true);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {/* Search */}
+          <div className="sm:col-span-2 lg:col-span-1">
+            <div className="relative">
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+              <input
+                type="text"
+                placeholder="학생명, 학번 검색..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* University Filter */}
+          <select
+            value={universityFilter}
+            onChange={(e) => setUniversityFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">전체 대학교</option>
+            {universities.map((uni) => (
+              <option key={uni.id} value={uni.id}>
+                {uni.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Reason Filter */}
+          <select
+            value={reasonFilter}
+            onChange={(e) => setReasonFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">전체 사유</option>
+            <option value="illness">질병</option>
+            <option value="personal">개인 사정</option>
+            <option value="other">기타</option>
+          </select>
+
+          {/* Date Range */}
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            placeholder="시작일"
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            placeholder="종료일"
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+      </div>
+
+      {/* Results Count */}
+      <div className="text-sm text-gray-500 dark:text-gray-400">
+        총 {filteredAbsences.length}건
+      </div>
+
+      {/* Absence List */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 dark:bg-gray-700/50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  결석일
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  학생 정보
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  대학교
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  사유
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  비고
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  관리
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {filteredAbsences.length > 0 ? (
+                filteredAbsences.map((absence) => {
+                  const reasonInfo = reasonLabels[absence.reason];
+                  return (
+                    <tr
+                      key={absence.id}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    >
+                      <td className="px-4 py-4">
+                        <p className="font-medium text-gray-900 dark:text-white">
+                          {new Date(absence.absence_date).toLocaleDateString('ko-KR')}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <Link
+                          href={`/agency/students/${absence.student_id}`}
+                          className="hover:underline"
+                        >
+                          <p className="font-medium text-gray-900 dark:text-white">
+                            {absence.students.name}
+                          </p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">
+                            {absence.students.student_no}
+                          </p>
+                        </Link>
+                      </td>
+                      <td className="px-4 py-4 text-gray-900 dark:text-white">
+                        {absence.students.universities?.name}
+                      </td>
+                      <td className="px-4 py-4">
+                        <span
+                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${reasonInfo.color}`}
+                        >
+                          {reasonInfo.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-gray-500 dark:text-gray-400 max-w-xs truncate">
+                        {absence.note || '-'}
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <button
+                          onClick={() => openDeleteModal(absence.id)}
+                          className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          삭제
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={6} className="px-4 py-12 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <svg
+                        className="w-12 h-12 text-gray-300 dark:text-gray-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                        />
+                      </svg>
+                      <p className="text-gray-500 dark:text-gray-400">
+                        {search || universityFilter || reasonFilter || startDate || endDate
+                          ? '검색 결과가 없습니다'
+                          : '등록된 결석이 없습니다'}
+                      </p>
+                      <Link href="/agency/absences/new">
+                        <Button size="sm">
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                          결석 등록
+                        </Button>
+                      </Link>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setDeletingId(null);
+        }}
+        onConfirm={handleDelete}
+        title="결석 삭제"
+        message="이 결석 기록을 삭제하시겠습니까? 관련 증빙 파일도 함께 삭제됩니다."
+        confirmText="삭제"
+        variant="danger"
+        isLoading={isDeleting}
+      />
+    </div>
+  );
+}

@@ -1,12 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { logLoginSuccess, logLoginFailure } from '@/lib/audit';
+import { rateLimiters } from '@/lib/rate-limit';
 import type { UserRole } from '@/types/database';
 
 export async function POST(request: NextRequest) {
     try {
+        const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+
+        // Rate limit check
+        const rateLimitResult = rateLimiters.login(ipAddress);
+        if (!rateLimitResult.success) {
+            const retryAfter = Math.ceil(rateLimitResult.resetIn / 1000);
+            return NextResponse.json(
+                { error: `너무 많은 로그인 시도입니다. ${retryAfter}초 후에 다시 시도해주세요.` },
+                {
+                    status: 429,
+                    headers: {
+                        'Retry-After': String(retryAfter),
+                        'X-RateLimit-Remaining': '0',
+                        'X-RateLimit-Reset': String(Math.ceil(rateLimitResult.resetIn / 1000)),
+                    }
+                }
+            );
+        }
+
         const { email, password } = await request.json();
-        const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null;
 
         if (!email || !password) {
             return NextResponse.json(

@@ -46,6 +46,7 @@ export interface Student {
   consent_file_url: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface Absence {
@@ -103,49 +104,69 @@ export interface Database {
     Tables: {
       users: {
         Row: User;
-        Insert: Omit<User, 'id' | 'created_at'>;
+        Insert: Omit<User, 'created_at'> & { id: string };
         Update: Partial<Omit<User, 'id' | 'created_at'>>;
       };
       universities: {
         Row: University;
-        Insert: Omit<University, 'id' | 'created_at'>;
+        Insert: Omit<University, 'id' | 'created_at'> & { id?: string };
         Update: Partial<Omit<University, 'id' | 'created_at'>>;
       };
       university_contacts: {
         Row: UniversityContact;
-        Insert: Omit<UniversityContact, 'id' | 'created_at'>;
+        Insert: Omit<UniversityContact, 'id' | 'created_at'> & { id?: string };
         Update: Partial<Omit<UniversityContact, 'id' | 'created_at'>>;
       };
       students: {
         Row: Student;
-        Insert: Omit<Student, 'id' | 'created_at' | 'updated_at'>;
+        Insert: Omit<Student, 'id' | 'created_at' | 'updated_at'> & { id?: string };
         Update: Partial<Omit<Student, 'id' | 'created_at' | 'updated_at'>>;
       };
       absences: {
         Row: Absence;
-        Insert: Omit<Absence, 'id' | 'created_at'>;
+        Insert: Omit<Absence, 'id' | 'created_at'> & { id?: string };
         Update: Partial<Omit<Absence, 'id' | 'created_at'>>;
       };
       absence_files: {
         Row: AbsenceFile;
-        Insert: Omit<AbsenceFile, 'id' | 'created_at'>;
+        Insert: Omit<AbsenceFile, 'id' | 'created_at'> & { id?: string };
         Update: Partial<Omit<AbsenceFile, 'id' | 'created_at'>>;
       };
       quarterly_checkins: {
         Row: QuarterlyCheckin;
-        Insert: Omit<QuarterlyCheckin, 'id' | 'created_at'>;
+        Insert: Omit<QuarterlyCheckin, 'id' | 'created_at'> & { id?: string };
         Update: Partial<Omit<QuarterlyCheckin, 'id' | 'created_at'>>;
       };
       contact_change_logs: {
         Row: ContactChangeLog;
-        Insert: Omit<ContactChangeLog, 'id' | 'created_at'>;
+        Insert: Omit<ContactChangeLog, 'id' | 'created_at'> & { id?: string };
         Update: Partial<Omit<ContactChangeLog, 'id' | 'created_at'>>;
       };
       audit_logs: {
         Row: AuditLog;
-        Insert: Omit<AuditLog, 'id' | 'created_at'>;
+        Insert: Omit<AuditLog, 'id' | 'created_at'> & { id?: string };
         Update: Partial<Omit<AuditLog, 'id' | 'created_at'>>;
       };
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      get_user_role: {
+        Args: Record<string, never>;
+        Returns: UserRole;
+      };
+      get_user_university_id: {
+        Args: Record<string, never>;
+        Returns: string;
+      };
+    };
+    Enums: {
+      user_role: UserRole;
+      student_program: StudentProgram;
+      student_status: StudentStatus;
+      absence_reason: AbsenceReason;
+      audit_action_type: AuditActionType;
     };
   };
 }

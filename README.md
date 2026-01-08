@@ -65,3 +65,68 @@ src/
 | 관리자 (admin) | `/admin` | 전체 Read/Write |
 | 네팔 유학원 (nepal_agency) | `/agency` | 학생/결석 Write |
 | 대학교 국제처 (university) | `/university` | 소속 학생 Read Only |
+
+## 개발 명령어
+
+```bash
+# 의존성 설치
+npm install
+
+# 개발 서버 실행
+npm run dev
+
+# 프로덕션 빌드
+npm run build
+
+# 프로덕션 서버 실행
+npm run start
+
+# ESLint 실행
+npm run lint
+
+# Prettier 포맷팅
+npm run format
+
+# Prettier 체크 (CI용)
+npm run format:check
+```
+
+## Vercel 배포
+
+### 1. Vercel 프로젝트 연결
+
+```bash
+# Vercel CLI 설치 (최초 1회)
+npm i -g vercel
+
+# 프로젝트 연결
+vercel link
+```
+
+### 2. 환경 변수 설정
+
+Vercel 대시보드에서 다음 환경 변수를 설정하세요:
+
+| 변수명 | 설명 | 환경 |
+|--------|------|------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase 프로젝트 URL | All |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase Anon Key | All |
+| `NEXT_PUBLIC_APP_URL` | 앱 URL | Production |
+| `RESEND_API_KEY` | Resend API 키 (이메일용) | All |
+
+### 3. 배포
+
+```bash
+# 프리뷰 배포
+vercel
+
+# 프로덕션 배포
+vercel --prod
+```
+
+## 데이터베이스 마이그레이션
+
+Supabase 대시보드의 SQL Editor에서 다음 순서로 실행:
+
+1. `supabase/migrations/20250108_initial_schema.sql`
+2. `supabase/migrations/20250108_add_missing_rls_policies.sql`
