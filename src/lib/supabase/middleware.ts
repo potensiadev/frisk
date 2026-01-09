@@ -5,7 +5,7 @@ import type { UserRole } from '@/types/database';
 
 // Role-based path permissions
 const ROLE_PATHS: Record<UserRole, string[]> = {
-    admin: ['/admin', '/settings'],
+    admin: ['/admin', '/agency', '/university', '/settings'],
     nepal_agency: ['/agency', '/settings'],
     university: ['/university', '/settings'],
 };
