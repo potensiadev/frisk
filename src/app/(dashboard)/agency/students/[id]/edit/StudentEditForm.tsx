@@ -174,8 +174,12 @@ export function StudentEditForm({ student, universities }: StudentEditFormProps)
         throw new Error(data.error || '학생 정보 수정에 실패했습니다');
       }
 
-      setSuccess('학생 정보가 수정되었습니다');
-      router.refresh();
+      setSuccess('학생 정보가 수정되었습니다. 잠시 후 이전 페이지로 이동합니다.');
+
+      // 1초 후 이전 페이지로 리다이렉트
+      setTimeout(() => {
+        router.back();
+      }, 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다');
     } finally {
