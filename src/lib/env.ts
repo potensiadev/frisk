@@ -1,33 +1,48 @@
 /**
  * Environment variable validation
- * Throws descriptive errors if required env vars are missing
+ *
+ * IMPORTANT: NEXT_PUBLIC_* variables must be referenced directly (not dynamically)
+ * because Next.js replaces them at build time. Dynamic access like process.env[name]
+ * will not work in production client-side code.
  */
 
-function getRequiredEnvVar(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(
-      `Missing required environment variable: ${name}. ` +
-      `Please check your .env.local file or deployment environment.`
-    );
-  }
-  return value;
-}
-
 // Public environment variables (available on client and server)
+// These must be direct references for Next.js build-time replacement to work
 export const env = {
   get SUPABASE_URL() {
-    return getRequiredEnvVar('NEXT_PUBLIC_SUPABASE_URL');
+    const value = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!value) {
+      throw new Error(
+        `Missing required environment variable: NEXT_PUBLIC_SUPABASE_URL. ` +
+        `Please check your .env.local file or deployment environment.`
+      );
+    }
+    return value;
   },
   get SUPABASE_ANON_KEY() {
-    return getRequiredEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+    const value = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!value) {
+      throw new Error(
+        `Missing required environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY. ` +
+        `Please check your .env.local file or deployment environment.`
+      );
+    }
+    return value;
   },
 } as const;
 
 // Server-only environment variables
+// These don't need NEXT_PUBLIC_ prefix and only run on server
 export const serverEnv = {
   get SUPABASE_SERVICE_ROLE_KEY() {
-    return getRequiredEnvVar('SUPABASE_SERVICE_ROLE_KEY');
+    const value = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!value) {
+      throw new Error(
+        `Missing required environment variable: SUPABASE_SERVICE_ROLE_KEY. ` +
+        `Please check your .env.local file or deployment environment.`
+      );
+    }
+    return value;
   },
 } as const;
 
