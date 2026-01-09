@@ -144,8 +144,12 @@ export function UniversityEditForm({ university, contacts: initialContacts, stud
         }
       }
 
-      setSuccess('대학교 정보가 수정되었습니다');
-      router.refresh();
+      setSuccess('대학교 정보가 수정되었습니다. 잠시 후 목록으로 이동합니다.');
+
+      // 1초 후 대학교 관리 페이지로 리다이렉트
+      setTimeout(() => {
+        router.push('/admin/universities');
+      }, 1000);
     } catch (error) {
       console.error('Unexpected error:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
