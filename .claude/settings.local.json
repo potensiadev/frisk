@@ -11,7 +11,9 @@
       "Bash(npm run lint)",
       "Bash(git add:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 로그아웃 및 대학교 저장 무한 로딩 버그 수정\n\n- 로그아웃 버튼: signOut\\(\\) 반환값 처리 및 에러 발생 시에도 로그인 페이지로 이동\n- 대학교 수정/등록: try-catch-finally로 감싸서 예외 발생 시에도 로딩 상태 해제\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 환경 변수 동적 접근을 직접 참조로 변경\n\nNext.js는 NEXT_PUBLIC_* 환경 변수를 빌드 타임에 인라인하므로\nprocess.env[name] 동적 접근은 프로덕션에서 작동하지 않음.\n직접 참조 방식으로 변경하여 Vercel 배포 시 정상 작동하도록 수정.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)"
     ]
   }
 }
