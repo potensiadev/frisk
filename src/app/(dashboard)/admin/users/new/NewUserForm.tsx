@@ -24,7 +24,7 @@ const roleOptions = [
   { value: 'university', label: '대학교' },
 ];
 
-export function NewUserForm({ universities }: NewUserFormProps) {
+export function NewUserForm({ universities: initialUniversities }: NewUserFormProps) {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,10 +34,61 @@ export function NewUserForm({ universities }: NewUserFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  // 대학교 신규 등록 관련 상태
+  const [universities, setUniversities] = useState<University[]>(initialUniversities);
+  const [isAddingUniversity, setIsAddingUniversity] = useState(false);
+  const [newUniversityName, setNewUniversityName] = useState('');
+  const [isCreatingUniversity, setIsCreatingUniversity] = useState(false);
+  const [universityError, setUniversityError] = useState('');
+
   const universityOptions = universities.map((u) => ({
     value: u.id,
     label: u.name,
   }));
+
+  // 대학교 신규 등록 처리
+  const handleCreateUniversity = async () => {
+    setUniversityError('');
+
+    if (!newUniversityName.trim()) {
+      setUniversityError('대학교 이름을 입력해주세요');
+      return;
+    }
+
+    setIsCreatingUniversity(true);
+
+    try {
+      const response = await fetch('/api/admin/universities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newUniversityName.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || '대학교 등록에 실패했습니다');
+      }
+
+      // 등록 성공 시 목록에 추가하고 선택
+      const newUniversity = data.university as University;
+      setUniversities((prev) => [...prev, newUniversity].sort((a, b) => a.name.localeCompare(b.name)));
+      setUniversityId(newUniversity.id);
+      setIsAddingUniversity(false);
+      setNewUniversityName('');
+    } catch (err) {
+      setUniversityError(err instanceof Error ? err.message : '오류가 발생했습니다');
+    } finally {
+      setIsCreatingUniversity(false);
+    }
+  };
+
+  // 신규 등록 취소
+  const handleCancelAddUniversity = () => {
+    setIsAddingUniversity(false);
+    setNewUniversityName('');
+    setUniversityError('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,14 +212,77 @@ export function NewUserForm({ universities }: NewUserFormProps) {
 
             {/* University (only for university role) */}
             {role === 'university' && (
-              <Select
-                label="소속 대학교"
-                value={universityId}
-                onChange={(e) => setUniversityId(e.target.value)}
-                options={universityOptions}
-                placeholder="대학교를 선택해주세요"
-                required
-              />
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  소속 대학교 <span className="text-red-500">*</span>
+                </label>
+
+                {!isAddingUniversity ? (
+                  // 드롭다운 모드
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <Select
+                        value={universityId}
+                        onChange={(e) => setUniversityId(e.target.value)}
+                        options={universityOptions}
+                        placeholder="대학교를 선택해주세요"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setIsAddingUniversity(true)}
+                      className="shrink-0"
+                    >
+                      신규 등록
+                    </Button>
+                  </div>
+                ) : (
+                  // 텍스트 입력 모드
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newUniversityName}
+                        onChange={(e) => setNewUniversityName(e.target.value)}
+                        placeholder="대학교 이름을 입력해주세요"
+                        maxLength={100}
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleCreateUniversity();
+                          } else if (e.key === 'Escape') {
+                            handleCancelAddUniversity();
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        onClick={handleCreateUniversity}
+                        isLoading={isCreatingUniversity}
+                        disabled={isCreatingUniversity}
+                        className="shrink-0"
+                      >
+                        완료
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={handleCancelAddUniversity}
+                        disabled={isCreatingUniversity}
+                        className="shrink-0"
+                      >
+                        취소
+                      </Button>
+                    </div>
+                    {universityError && (
+                      <p className="text-sm text-red-600 dark:text-red-400">{universityError}</p>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

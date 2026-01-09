@@ -128,8 +128,17 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Failed to create user:', error);
+
+    // 개발/디버깅용: 실제 에러 메시지 포함
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const isDev = process.env.NODE_ENV === 'development';
+
     return NextResponse.json(
-      { error: '사용자 생성에 실패했습니다' },
+      {
+        error: '사용자 생성에 실패했습니다',
+        // 프로덕션에서도 에러 디테일 포함 (일시적 디버깅용)
+        detail: errorMessage
+      },
       { status: 500 }
     );
   }
