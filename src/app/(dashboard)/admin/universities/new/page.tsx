@@ -89,7 +89,8 @@ export default function NewUniversityPage() {
       router.refresh();
     } catch (error) {
       console.error('Unexpected error:', error);
-      setError('예상치 못한 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setError(`오류가 발생했습니다: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }

@@ -24,13 +24,18 @@ interface UniversityEditFormProps {
 export function UniversityEditForm({ university, contacts: initialContacts, studentCount }: UniversityEditFormProps) {
   const router = useRouter();
   const [name, setName] = useState(university.name);
-  const [contacts, setContacts] = useState<Contact[]>(
-    initialContacts.map((c) => ({
+  const [contacts, setContacts] = useState<Contact[]>(() => {
+    const mapped = initialContacts.map((c) => ({
       id: c.id,
       email: c.email,
       is_primary: c.is_primary,
-    }))
-  );
+    }));
+    // 담당자가 있는데 대표가 없으면 첫 번째를 대표로 설정
+    if (mapped.length > 0 && !mapped.some((c) => c.is_primary)) {
+      mapped[0].is_primary = true;
+    }
+    return mapped;
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -143,7 +148,8 @@ export function UniversityEditForm({ university, contacts: initialContacts, stud
       router.refresh();
     } catch (error) {
       console.error('Unexpected error:', error);
-      setError('예상치 못한 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setError(`오류가 발생했습니다: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }

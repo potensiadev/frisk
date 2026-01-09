@@ -7,7 +7,11 @@
       "Bash(npm run build:*)",
       "Bash(npm install:*)",
       "Bash(find:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run lint)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: 로그아웃 및 대학교 저장 무한 로딩 버그 수정\n\n- 로그아웃 버튼: signOut\\(\\) 반환값 처리 및 에러 발생 시에도 로그인 페이지로 이동\n- 대학교 수정/등록: try-catch-finally로 감싸서 예외 발생 시에도 로딩 상태 해제\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push)"
     ]
   }
 }
