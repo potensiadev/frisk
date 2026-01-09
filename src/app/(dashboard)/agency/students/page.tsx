@@ -54,7 +54,10 @@ interface SearchParams {
   university?: string;
   program?: string;
   status?: string;
+  page?: string;
 }
+
+const PAGE_SIZE = 20;
 
 export default async function StudentsPage({
   searchParams,
@@ -70,6 +73,11 @@ export default async function StudentsPage({
     redirect('/login');
   }
 
+  // Pagination
+  const currentPage = Math.max(1, parseInt(params.page || '1', 10));
+  const from = (currentPage - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
+
   // Build query with server-side filtering
   let query = supabase
     .from('students')
@@ -79,7 +87,7 @@ export default async function StudentsPage({
         id,
         name
       )
-    `)
+    `, { count: 'exact' })
     .is('deleted_at', null);
 
   // Apply filters on server
@@ -97,7 +105,9 @@ export default async function StudentsPage({
     query = query.or(`name.ilike.%${params.search}%,student_no.ilike.%${params.search}%,phone.ilike.%${params.search}%`);
   }
 
-  const { data: students, error } = await query.order('created_at', { ascending: false });
+  const { data: students, error, count: filteredCount } = await query
+    .order('created_at', { ascending: false })
+    .range(from, to);
 
   if (error) {
     console.error('Failed to fetch students:', error);
@@ -116,6 +126,7 @@ export default async function StudentsPage({
     .order('name');
 
   const hasFilters = !!(params.search || params.university || params.program || params.status);
+  const totalPages = Math.ceil((filteredCount || 0) / PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -125,7 +136,7 @@ export default async function StudentsPage({
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">학생 관리</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
             {hasFilters
-              ? `검색 결과 ${students?.length || 0}명 (전체 ${totalCount || 0}명)`
+              ? `검색 결과 ${filteredCount || 0}명 (전체 ${totalCount || 0}명)`
               : `등록된 학생 ${totalCount || 0}명`
             }
           </p>
@@ -149,6 +160,11 @@ export default async function StudentsPage({
           university: params.university || '',
           program: params.program || '',
           status: params.status || '',
+        }}
+        pagination={{
+          currentPage,
+          totalPages,
+          totalCount: filteredCount || 0,
         }}
       />
     </div>

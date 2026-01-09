@@ -21,10 +21,17 @@ interface FilterValues {
   status: string;
 }
 
+interface PaginationInfo {
+  currentPage: number;
+  totalPages: number;
+  totalCount: number;
+}
+
 interface StudentListProps {
   students: StudentWithUniversity[];
   universities: { id: string; name: string }[];
   initialFilters: FilterValues;
+  pagination: PaginationInfo;
 }
 
 const programLabels: Record<StudentProgram, string> = {
@@ -74,7 +81,7 @@ const statusOptions = [
   { value: 'expelled', label: '제적' },
 ];
 
-export function StudentList({ students, universities, initialFilters }: StudentListProps) {
+export function StudentList({ students, universities, initialFilters, pagination }: StudentListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -151,6 +158,18 @@ export function StudentList({ students, universities, initialFilters }: StudentL
       router.push('/agency/students', { scroll: false });
     });
   }, [router]);
+
+  const goToPage = useCallback((page: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (page > 1) {
+      params.set('page', page.toString());
+    } else {
+      params.delete('page');
+    }
+    startTransition(() => {
+      router.push(`/agency/students?${params.toString()}`, { scroll: false });
+    });
+  }, [searchParams, router]);
 
   const hasFilters = !!(searchQuery || universityFilter || programFilter || statusFilter);
 
@@ -321,6 +340,67 @@ export function StudentList({ students, universities, initialFilters }: StudentL
           emptyMessage="등록된 학생이 없습니다"
         />
       </div>
+
+      {/* Pagination */}
+      {pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-xl px-4 py-3 shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            총 {pagination.totalCount}명 중 {(pagination.currentPage - 1) * 20 + 1}-{Math.min(pagination.currentPage * 20, pagination.totalCount)}명 표시
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => goToPage(pagination.currentPage - 1)}
+              disabled={pagination.currentPage <= 1 || isPending}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              이전
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                let pageNum: number;
+                if (pagination.totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (pagination.currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (pagination.currentPage >= pagination.totalPages - 2) {
+                  pageNum = pagination.totalPages - 4 + i;
+                } else {
+                  pageNum = pagination.currentPage - 2 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => goToPage(pageNum)}
+                    disabled={isPending}
+                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                      pageNum === pagination.currentPage
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => goToPage(pagination.currentPage + 1)}
+              disabled={pagination.currentPage >= pagination.totalPages || isPending}
+            >
+              다음
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Delete Modal */}
       <ConfirmModal

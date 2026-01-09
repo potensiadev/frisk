@@ -39,6 +39,7 @@ export function AbsenceForm({ students }: AbsenceFormProps) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [absenceFilePath, setAbsenceFilePath] = useState<string | null>(null);
+  const [continueAdding, setContinueAdding] = useState(false);
 
   // Update studentId when preselected changes
   useEffect(() => {
@@ -47,10 +48,19 @@ export function AbsenceForm({ students }: AbsenceFormProps) {
     }
   }, [preselectedStudentId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const resetForm = () => {
+    setStudentId('');
+    setAbsenceDate(new Date().toISOString().split('T')[0]);
+    setNote('');
+    setAbsenceFilePath(null);
+    // 사유와 알림 설정은 유지 (연속 등록 시 편의)
+  };
+
+  const handleSubmit = async (e: React.FormEvent, shouldContinue: boolean = false) => {
     e.preventDefault();
     setError('');
     setSuccess('');
+    setContinueAdding(shouldContinue);
 
     if (!studentId) {
       setError('학생을 선택해주세요');
@@ -95,15 +105,21 @@ export function AbsenceForm({ students }: AbsenceFormProps) {
         }
       }
 
-      setSuccess(successMessage);
-
-      // Reset form or navigate
-      setTimeout(() => {
-        router.push('/agency/absences');
-      }, 1500);
+      if (shouldContinue) {
+        // 연속 등록: 폼 초기화하고 성공 메시지 표시
+        setSuccess(successMessage + '. 다음 결석을 입력하세요.');
+        resetForm();
+        setIsSubmitting(false);
+      } else {
+        setSuccess(successMessage);
+        // 목록으로 이동
+        setTimeout(() => {
+          router.push('/agency/absences');
+        }, 1500);
+        setIsSubmitting(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다');
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -262,7 +278,23 @@ export function AbsenceForm({ students }: AbsenceFormProps) {
           >
             취소
           </Button>
-          <Button type="submit" isLoading={isSubmitting}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={(e) => handleSubmit(e, true)}
+            disabled={isSubmitting}
+            isLoading={isSubmitting && continueAdding}
+          >
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            등록 후 계속 추가
+          </Button>
+          <Button
+            type="submit"
+            isLoading={isSubmitting && !continueAdding}
+            disabled={isSubmitting}
+          >
             결석 등록
           </Button>
         </div>

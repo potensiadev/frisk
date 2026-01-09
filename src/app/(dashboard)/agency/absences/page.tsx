@@ -56,7 +56,10 @@ interface SearchParams {
   reason?: string;
   startDate?: string;
   endDate?: string;
+  page?: string;
 }
+
+const PAGE_SIZE = 20;
 
 export default async function AbsencesPage({
   searchParams,
@@ -71,6 +74,11 @@ export default async function AbsencesPage({
   if (!user) {
     redirect('/login');
   }
+
+  // Pagination
+  const currentPage = Math.max(1, parseInt(params.page || '1', 10));
+  const from = (currentPage - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
 
   // Build query with server-side filtering
   let query = supabase
@@ -87,7 +95,7 @@ export default async function AbsencesPage({
           name
         )
       )
-    `);
+    `, { count: 'exact' });
 
   // Apply filters on server
   if (params.university) {
@@ -106,9 +114,9 @@ export default async function AbsencesPage({
     query = query.or(`students.name.ilike.%${params.search}%,students.student_no.ilike.%${params.search}%`);
   }
 
-  const { data: absences, error } = await query
+  const { data: absences, error, count: filteredCount } = await query
     .order('absence_date', { ascending: false })
-    .limit(100);
+    .range(from, to);
 
   if (error) {
     console.error('Failed to fetch absences:', error);
@@ -126,6 +134,7 @@ export default async function AbsencesPage({
     .order('name');
 
   const hasFilters = !!(params.search || params.university || params.reason || params.startDate || params.endDate);
+  const totalPages = Math.ceil((filteredCount || 0) / PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -135,7 +144,7 @@ export default async function AbsencesPage({
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">결석 관리</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
             {hasFilters
-              ? `검색 결과 ${absences?.length || 0}건 (전체 ${totalCount || 0}건)`
+              ? `검색 결과 ${filteredCount || 0}건 (전체 ${totalCount || 0}건)`
               : `학생 결석 현황을 관리하고 대학교에 알림을 보냅니다`
             }
           </p>
@@ -160,6 +169,11 @@ export default async function AbsencesPage({
           reason: params.reason || '',
           startDate: params.startDate || '',
           endDate: params.endDate || '',
+        }}
+        pagination={{
+          currentPage,
+          totalPages,
+          totalCount: filteredCount || 0,
         }}
       />
     </div>

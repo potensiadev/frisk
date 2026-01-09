@@ -32,15 +32,29 @@ export function StudentForm({ universities }: StudentFormProps) {
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [continueAdding, setContinueAdding] = useState(false);
 
   const universityOptions = universities.map((u) => ({
     value: u.id,
     label: u.name,
   }));
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const resetForm = () => {
+    setStudentNo('');
+    setName('');
+    setDepartment('');
+    setAddress('');
+    setPhone('');
+    setEmail('');
+    // 대학교와 프로그램은 유지 (연속 등록 시 편의)
+  };
+
+  const handleSubmit = async (e: React.FormEvent, shouldContinue: boolean = false) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
+    setContinueAdding(shouldContinue);
 
     // Validation
     if (!universityId) {
@@ -113,8 +127,16 @@ export function StudentForm({ universities }: StudentFormProps) {
         throw new Error(data.error || '학생 등록에 실패했습니다');
       }
 
-      router.push('/agency/students');
-      router.refresh();
+      if (shouldContinue) {
+        // 연속 등록: 폼 초기화하고 성공 메시지 표시
+        setSuccess(`${name}님이 등록되었습니다. 다음 학생을 입력하세요.`);
+        resetForm();
+        setIsSubmitting(false);
+      } else {
+        // 목록으로 이동
+        router.push('/agency/students');
+        router.refresh();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다');
       setIsSubmitting(false);
@@ -248,6 +270,13 @@ export function StudentForm({ universities }: StudentFormProps) {
           </div>
         )}
 
+        {/* Success Message */}
+        {success && (
+          <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+            <p className="text-sm text-green-600 dark:text-green-400">{success}</p>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex justify-end gap-3">
           <Button
@@ -258,7 +287,23 @@ export function StudentForm({ universities }: StudentFormProps) {
           >
             취소
           </Button>
-          <Button type="submit" isLoading={isSubmitting}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={(e) => handleSubmit(e, true)}
+            disabled={isSubmitting}
+            isLoading={isSubmitting && continueAdding}
+          >
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            등록 후 계속 추가
+          </Button>
+          <Button
+            type="submit"
+            isLoading={isSubmitting && !continueAdding}
+            disabled={isSubmitting}
+          >
             등록하기
           </Button>
         </div>
