@@ -1,6 +1,32 @@
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
-import { UserList } from './UserList';
+import dynamic from 'next/dynamic';
+
+// 페이지 데이터 재검증 시간 (5분)
+export const revalidate = 300;
+
+// 동적 임포트로 초기 번들 크기 감소
+const UserList = dynamic(() => import('./UserList').then(mod => ({ default: mod.UserList })), {
+  loading: () => <UserListSkeleton />,
+  ssr: true,
+});
+
+function UserListSkeleton() {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="animate-pulse">
+        <div className="h-12 bg-gray-100 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600" />
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="h-16 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 gap-4">
+            <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-32" />
+            <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-24" />
+            <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-20" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default async function UsersPage() {
   const supabase = await createClient();

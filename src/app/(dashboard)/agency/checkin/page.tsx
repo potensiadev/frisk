@@ -1,6 +1,40 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { CheckinList } from './CheckinList';
+import dynamic from 'next/dynamic';
+
+// 페이지 데이터 재검증 시간 (1분) - 체크인 데이터는 실시간에 가깝게 표시
+export const revalidate = 60;
+
+// 동적 임포트로 초기 번들 크기 감소
+const CheckinList = dynamic(() => import('./CheckinList').then(mod => ({ default: mod.CheckinList })), {
+  loading: () => <CheckinListSkeleton />,
+  ssr: true,
+});
+
+function CheckinListSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Tab skeleton */}
+      <div className="flex gap-2">
+        <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse w-32" />
+        <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse w-32" />
+      </div>
+      {/* Cards skeleton */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="animate-pulse space-y-3">
+              <div className="h-5 bg-gray-200 dark:bg-gray-600 rounded w-3/4" />
+              <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-1/2" />
+              <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-2/3" />
+              <div className="h-8 bg-gray-200 dark:bg-gray-600 rounded w-full mt-4" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default async function CheckinPage() {
     const supabase = await createClient();

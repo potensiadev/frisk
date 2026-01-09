@@ -249,7 +249,8 @@ export async function GET(request: NextRequest) {
 
         const { count: totalStudents } = await studentsQuery;
 
-        return NextResponse.json({
+        // 캐싱 헤더 추가 (60초 캐시, 120초 stale-while-revalidate)
+        const response = NextResponse.json({
             year,
             quarter,
             total_students: totalStudents || 0,
@@ -257,6 +258,11 @@ export async function GET(request: NextRequest) {
             unchecked_students: (totalStudents || 0) - (checkins?.length || 0),
             completion_rate: totalStudents ? Math.round((checkins?.length || 0) / totalStudents * 100) : 0,
         });
+        response.headers.set(
+            'Cache-Control',
+            'private, s-maxage=60, stale-while-revalidate=120'
+        );
+        return response;
     } catch (error) {
         console.error('Checkin GET error:', error);
         return NextResponse.json(

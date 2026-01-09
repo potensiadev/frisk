@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/Modal';
 import type { Absence, Student, University, AbsenceReason } from '@/types/database';
@@ -13,9 +13,18 @@ interface AbsenceWithStudent extends Absence {
   };
 }
 
+interface FilterValues {
+  search: string;
+  university: string;
+  reason: string;
+  startDate: string;
+  endDate: string;
+}
+
 interface AbsenceListProps {
   absences: AbsenceWithStudent[];
   universities: { id: string; name: string }[];
+  initialFilters: FilterValues;
 }
 
 const reasonLabels: Record<AbsenceReason, { label: string; color: string }> = {
@@ -33,40 +42,73 @@ const reasonLabels: Record<AbsenceReason, { label: string; color: string }> = {
   },
 };
 
-export function AbsenceList({ absences: initialAbsences, universities }: AbsenceListProps) {
+export function AbsenceList({ absences, universities, initialFilters }: AbsenceListProps) {
   const router = useRouter();
-  const [absences, setAbsences] = useState(initialAbsences);
-  const [search, setSearch] = useState('');
-  const [universityFilter, setUniversityFilter] = useState('');
-  const [reasonFilter, setReasonFilter] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
+
+  const [search, setSearch] = useState(initialFilters.search);
+  const [universityFilter, setUniversityFilter] = useState(initialFilters.university);
+  const [reasonFilter, setReasonFilter] = useState(initialFilters.reason);
+  const [startDate, setStartDate] = useState(initialFilters.startDate);
+  const [endDate, setEndDate] = useState(initialFilters.endDate);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Filter absences
-  const filteredAbsences = absences.filter((absence) => {
-    const student = absence.students;
+  // Update URL with filters (server-side filtering)
+  const updateFilters = useCallback((newFilters: Partial<FilterValues>) => {
+    const params = new URLSearchParams(searchParams.toString());
 
-    const matchesSearch =
-      !search ||
-      student.name.toLowerCase().includes(search.toLowerCase()) ||
-      student.student_no.toLowerCase().includes(search.toLowerCase());
+    const filters = {
+      search: newFilters.search ?? search,
+      university: newFilters.university ?? universityFilter,
+      reason: newFilters.reason ?? reasonFilter,
+      startDate: newFilters.startDate ?? startDate,
+      endDate: newFilters.endDate ?? endDate,
+    };
 
-    const matchesUniversity =
-      !universityFilter || student.university_id === universityFilter;
+    // Update or remove params
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) {
+        params.set(key, value);
+      } else {
+        params.delete(key);
+      }
+    });
 
-    const matchesReason = !reasonFilter || absence.reason === reasonFilter;
+    startTransition(() => {
+      router.push(`/agency/absences?${params.toString()}`, { scroll: false });
+    });
+  }, [searchParams, router, search, universityFilter, reasonFilter, startDate, endDate]);
 
-    const matchesStartDate =
-      !startDate || absence.absence_date >= startDate;
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    const timeoutId = setTimeout(() => {
+      updateFilters({ search: value });
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [updateFilters]);
 
-    const matchesEndDate =
-      !endDate || absence.absence_date <= endDate;
+  const handleFilterChange = useCallback((key: keyof FilterValues, value: string) => {
+    switch (key) {
+      case 'university':
+        setUniversityFilter(value);
+        break;
+      case 'reason':
+        setReasonFilter(value);
+        break;
+      case 'startDate':
+        setStartDate(value);
+        break;
+      case 'endDate':
+        setEndDate(value);
+        break;
+    }
+    updateFilters({ [key]: value });
+  }, [updateFilters]);
 
-    return matchesSearch && matchesUniversity && matchesReason && matchesStartDate && matchesEndDate;
-  });
+  const hasFilters = !!(search || universityFilter || reasonFilter || startDate || endDate);
 
   const handleDelete = async () => {
     if (!deletingId) return;
@@ -82,7 +124,6 @@ export function AbsenceList({ absences: initialAbsences, universities }: Absence
         throw new Error(data.error || '삭제에 실패했습니다');
       }
 
-      setAbsences(absences.filter((a) => a.id !== deletingId));
       setShowDeleteModal(false);
       setDeletingId(null);
       router.refresh();
@@ -99,7 +140,7 @@ export function AbsenceList({ absences: initialAbsences, universities }: Absence
   };
 
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 ${isPending ? 'opacity-70' : ''}`}>
       {/* Filters */}
       <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -123,7 +164,7 @@ export function AbsenceList({ absences: initialAbsences, universities }: Absence
                 type="text"
                 placeholder="학생명, 학번 검색..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -132,7 +173,7 @@ export function AbsenceList({ absences: initialAbsences, universities }: Absence
           {/* University Filter */}
           <select
             value={universityFilter}
-            onChange={(e) => setUniversityFilter(e.target.value)}
+            onChange={(e) => handleFilterChange('university', e.target.value)}
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">전체 대학교</option>
@@ -146,7 +187,7 @@ export function AbsenceList({ absences: initialAbsences, universities }: Absence
           {/* Reason Filter */}
           <select
             value={reasonFilter}
-            onChange={(e) => setReasonFilter(e.target.value)}
+            onChange={(e) => handleFilterChange('reason', e.target.value)}
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">전체 사유</option>
@@ -159,7 +200,7 @@ export function AbsenceList({ absences: initialAbsences, universities }: Absence
           <input
             type="date"
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={(e) => handleFilterChange('startDate', e.target.value)}
             placeholder="시작일"
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
@@ -167,7 +208,7 @@ export function AbsenceList({ absences: initialAbsences, universities }: Absence
           <input
             type="date"
             value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(e) => handleFilterChange('endDate', e.target.value)}
             placeholder="종료일"
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
@@ -176,11 +217,11 @@ export function AbsenceList({ absences: initialAbsences, universities }: Absence
 
       {/* Results Count */}
       <div className="text-sm text-gray-500 dark:text-gray-400">
-        총 {filteredAbsences.length}건
+        {isPending ? '검색 중...' : `총 ${absences.length}건`}
       </div>
 
       {/* Absence List */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden ${isPending ? 'pointer-events-none' : ''}`}>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-700/50">
@@ -206,8 +247,8 @@ export function AbsenceList({ absences: initialAbsences, universities }: Absence
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredAbsences.length > 0 ? (
-                filteredAbsences.map((absence) => {
+              {absences.length > 0 ? (
+                absences.map((absence) => {
                   const reasonInfo = reasonLabels[absence.reason];
                   return (
                     <tr
@@ -274,7 +315,7 @@ export function AbsenceList({ absences: initialAbsences, universities }: Absence
                         />
                       </svg>
                       <p className="text-gray-500 dark:text-gray-400">
-                        {search || universityFilter || reasonFilter || startDate || endDate
+                        {hasFilters
                           ? '검색 결과가 없습니다'
                           : '등록된 결석이 없습니다'}
                       </p>

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useCallback, useTransition } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Table } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
@@ -14,9 +14,17 @@ interface StudentWithUniversity extends Student {
   universities: University;
 }
 
+interface FilterValues {
+  search: string;
+  university: string;
+  program: string;
+  status: string;
+}
+
 interface StudentListProps {
   students: StudentWithUniversity[];
   universities: { id: string; name: string }[];
+  initialFilters: FilterValues;
 }
 
 const programLabels: Record<StudentProgram, string> = {
@@ -66,53 +74,85 @@ const statusOptions = [
   { value: 'expelled', label: '제적' },
 ];
 
-export function StudentList({ students, universities }: StudentListProps) {
+export function StudentList({ students, universities, initialFilters }: StudentListProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
   const [deleteTarget, setDeleteTarget] = useState<StudentWithUniversity | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [universityFilter, setUniversityFilter] = useState('');
-  const [programFilter, setProgramFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  // Local state for immediate UI feedback
+  const [searchQuery, setSearchQuery] = useState(initialFilters.search);
+  const [universityFilter, setUniversityFilter] = useState(initialFilters.university);
+  const [programFilter, setProgramFilter] = useState(initialFilters.program);
+  const [statusFilter, setStatusFilter] = useState(initialFilters.status);
 
   const universityOptions = [
     { value: '', label: '전체 대학교' },
     ...universities.map((u) => ({ value: u.id, label: u.name })),
   ];
 
-  // Filtered students
-  const filteredStudents = useMemo(() => {
-    return students.filter((student) => {
-      // Search filter (name, student_no, phone)
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        const matchesSearch =
-          student.name.toLowerCase().includes(query) ||
-          student.student_no.toLowerCase().includes(query) ||
-          student.phone.includes(query);
-        if (!matchesSearch) return false;
-      }
+  // Update URL with filters (server-side filtering)
+  const updateFilters = useCallback((newFilters: Partial<FilterValues>) => {
+    const params = new URLSearchParams(searchParams.toString());
 
-      // University filter
-      if (universityFilter && student.university_id !== universityFilter) {
-        return false;
-      }
+    const filters = {
+      search: newFilters.search ?? searchQuery,
+      university: newFilters.university ?? universityFilter,
+      program: newFilters.program ?? programFilter,
+      status: newFilters.status ?? statusFilter,
+    };
 
-      // Program filter
-      if (programFilter && student.program !== programFilter) {
-        return false;
+    // Update or remove params
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) {
+        params.set(key, value);
+      } else {
+        params.delete(key);
       }
-
-      // Status filter
-      if (statusFilter && student.status !== statusFilter) {
-        return false;
-      }
-
-      return true;
     });
-  }, [students, searchQuery, universityFilter, programFilter, statusFilter]);
+
+    startTransition(() => {
+      router.push(`/agency/students?${params.toString()}`, { scroll: false });
+    });
+  }, [searchParams, router, searchQuery, universityFilter, programFilter, statusFilter]);
+
+  // Debounced search handler
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    // Debounce search to avoid too many requests
+    const timeoutId = setTimeout(() => {
+      updateFilters({ search: value });
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [updateFilters]);
+
+  const handleFilterChange = useCallback((key: keyof FilterValues, value: string) => {
+    switch (key) {
+      case 'university':
+        setUniversityFilter(value);
+        break;
+      case 'program':
+        setProgramFilter(value);
+        break;
+      case 'status':
+        setStatusFilter(value);
+        break;
+    }
+    updateFilters({ [key]: value });
+  }, [updateFilters]);
+
+  const clearFilters = useCallback(() => {
+    setSearchQuery('');
+    setUniversityFilter('');
+    setProgramFilter('');
+    setStatusFilter('');
+    startTransition(() => {
+      router.push('/agency/students', { scroll: false });
+    });
+  }, [router]);
+
+  const hasFilters = !!(searchQuery || universityFilter || programFilter || statusFilter);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -232,43 +272,38 @@ export function StudentList({ students, universities }: StudentListProps) {
   return (
     <>
       {/* Filters */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+      <div className={`bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700 ${isPending ? 'opacity-70' : ''}`}>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="lg:col-span-2">
             <Input
               placeholder="이름, 학번, 연락처로 검색..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
             />
           </div>
           <Select
             value={universityFilter}
-            onChange={(e) => setUniversityFilter(e.target.value)}
+            onChange={(e) => handleFilterChange('university', e.target.value)}
             options={universityOptions}
           />
           <Select
             value={programFilter}
-            onChange={(e) => setProgramFilter(e.target.value)}
+            onChange={(e) => handleFilterChange('program', e.target.value)}
             options={programOptions}
           />
           <Select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => handleFilterChange('status', e.target.value)}
             options={statusOptions}
           />
         </div>
-        {(searchQuery || universityFilter || programFilter || statusFilter) && (
+        {hasFilters && (
           <div className="mt-3 flex items-center justify-between">
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {filteredStudents.length}명의 학생이 검색되었습니다
+              {isPending ? '검색 중...' : `${students.length}명의 학생이 검색되었습니다`}
             </p>
             <button
-              onClick={() => {
-                setSearchQuery('');
-                setUniversityFilter('');
-                setProgramFilter('');
-                setStatusFilter('');
-              }}
+              onClick={clearFilters}
               className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
             >
               필터 초기화
@@ -278,12 +313,14 @@ export function StudentList({ students, universities }: StudentListProps) {
       </div>
 
       {/* Table */}
-      <Table
-        columns={columns}
-        data={filteredStudents}
-        keyExtractor={(item) => item.id}
-        emptyMessage="등록된 학생이 없습니다"
-      />
+      <div className={isPending ? 'opacity-70 pointer-events-none' : ''}>
+        <Table
+          columns={columns}
+          data={students}
+          keyExtractor={(item) => item.id}
+          emptyMessage="등록된 학생이 없습니다"
+        />
+      </div>
 
       {/* Delete Modal */}
       <ConfirmModal

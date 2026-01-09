@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useTransition } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { AuditActionType, UserRole } from '@/types/database';
 
 interface AuditLog {
@@ -16,8 +17,14 @@ interface AuditLog {
     } | null;
 }
 
+interface FilterValues {
+    type: string;
+    search: string;
+}
+
 interface AuditLogListProps {
-    initialLogs: AuditLog[];
+    logs: AuditLog[];
+    initialFilters: FilterValues;
 }
 
 const actionTypeLabels: Record<AuditActionType, { label: string; color: string; icon: string }> = {
@@ -64,32 +71,53 @@ const roleLabels: Record<UserRole, string> = {
     university: '대학교',
 };
 
-type FilterType = 'all' | AuditActionType;
+export function AuditLogList({ logs, initialFilters }: AuditLogListProps) {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const [isPending, startTransition] = useTransition();
 
-export function AuditLogList({ initialLogs }: AuditLogListProps) {
-    const [logs] = useState<AuditLog[]>(initialLogs);
-    const [filter, setFilter] = useState<FilterType>('all');
-    const [searchQuery, setSearchQuery] = useState('');
+    const [filter, setFilter] = useState(initialFilters.type);
+    const [searchQuery, setSearchQuery] = useState(initialFilters.search);
 
-    // Filter logs
-    const filteredLogs = logs.filter((log) => {
-        // Filter by action type
-        if (filter !== 'all' && log.action_type !== filter) {
-            return false;
+    // Update URL with filters (server-side filtering)
+    const updateFilters = useCallback((newFilters: Partial<FilterValues>) => {
+        const params = new URLSearchParams(searchParams.toString());
+
+        const filters = {
+            type: newFilters.type ?? filter,
+            search: newFilters.search ?? searchQuery,
+        };
+
+        // Update or remove params
+        if (filters.type && filters.type !== 'all') {
+            params.set('type', filters.type);
+        } else {
+            params.delete('type');
         }
 
-        // Filter by search query
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            const email = log.users?.email?.toLowerCase() || '';
-            const ip = log.ip_address?.toLowerCase() || '';
-            const details = log.details?.toLowerCase() || '';
-
-            return email.includes(query) || ip.includes(query) || details.includes(query);
+        if (filters.search) {
+            params.set('search', filters.search);
+        } else {
+            params.delete('search');
         }
 
-        return true;
-    });
+        startTransition(() => {
+            router.push(`/admin/logs?${params.toString()}`, { scroll: false });
+        });
+    }, [searchParams, router, filter, searchQuery]);
+
+    const handleFilterChange = useCallback((type: string) => {
+        setFilter(type);
+        updateFilters({ type });
+    }, [updateFilters]);
+
+    const handleSearchChange = useCallback((value: string) => {
+        setSearchQuery(value);
+        const timeoutId = setTimeout(() => {
+            updateFilters({ search: value });
+        }, 300);
+        return () => clearTimeout(timeoutId);
+    }, [updateFilters]);
 
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
@@ -102,7 +130,7 @@ export function AuditLogList({ initialLogs }: AuditLogListProps) {
         });
     };
 
-    const parseDetails = (detailsStr: string | null): Record<string, any> | null => {
+    const parseDetails = (detailsStr: string | null): Record<string, unknown> | null => {
         if (!detailsStr) return null;
         try {
             return JSON.parse(detailsStr);
@@ -112,16 +140,16 @@ export function AuditLogList({ initialLogs }: AuditLogListProps) {
     };
 
     return (
-        <div className="space-y-4">
+        <div className={`space-y-4 ${isPending ? 'opacity-70' : ''}`}>
             {/* Filters */}
             <div className="flex flex-col sm:flex-row gap-4">
                 {/* Action Type Filter */}
                 <div className="flex flex-wrap gap-2">
                     <button
-                        onClick={() => setFilter('all')}
+                        onClick={() => handleFilterChange('all')}
                         className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${filter === 'all'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
                             }`}
                     >
                         전체
@@ -129,10 +157,10 @@ export function AuditLogList({ initialLogs }: AuditLogListProps) {
                     {(Object.keys(actionTypeLabels) as AuditActionType[]).map((type) => (
                         <button
                             key={type}
-                            onClick={() => setFilter(type)}
+                            onClick={() => handleFilterChange(type)}
                             className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${filter === type
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
                                 }`}
                         >
                             {actionTypeLabels[type].label}
@@ -145,8 +173,8 @@ export function AuditLogList({ initialLogs }: AuditLogListProps) {
                     <input
                         type="text"
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="이메일, IP 주소 검색..."
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        placeholder="IP 주소 검색..."
                         className="w-full px-4 py-2 pl-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                     <svg
@@ -160,6 +188,13 @@ export function AuditLogList({ initialLogs }: AuditLogListProps) {
                 </div>
             </div>
 
+            {/* Loading indicator */}
+            {isPending && (
+                <div className="text-sm text-blue-600 dark:text-blue-400">
+                    검색 중...
+                </div>
+            )}
+
             {/* Log List */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 {/* Table Header (Desktop) */}
@@ -172,9 +207,9 @@ export function AuditLogList({ initialLogs }: AuditLogListProps) {
                 </div>
 
                 {/* Log Items */}
-                {filteredLogs.length > 0 ? (
+                {logs.length > 0 ? (
                     <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {filteredLogs.map((log) => {
+                        {logs.map((log) => {
                             const actionInfo = actionTypeLabels[log.action_type];
                             const details = parseDetails(log.details);
 

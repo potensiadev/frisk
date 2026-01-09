@@ -113,7 +113,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '결석 목록 조회에 실패했습니다' }, { status: 500 });
     }
 
-    return NextResponse.json({ absences: absences || [] });
+    // 캐싱 헤더 추가 (60초 캐시, 120초 stale-while-revalidate)
+    const response = NextResponse.json({ absences: absences || [] });
+    response.headers.set(
+      'Cache-Control',
+      'private, s-maxage=60, stale-while-revalidate=120'
+    );
+    return response;
   } catch (error) {
     console.error('Failed to fetch absences:', error);
     return NextResponse.json({ error: '서버 오류가 발생했습니다' }, { status: 500 });

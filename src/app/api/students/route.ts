@@ -76,7 +76,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '학생 목록 조회에 실패했습니다' }, { status: 500 });
     }
 
-    return NextResponse.json({ students });
+    // 캐싱 헤더 추가 (60초 캐시, 120초 stale-while-revalidate)
+    const response = NextResponse.json({ students });
+    response.headers.set(
+      'Cache-Control',
+      'private, s-maxage=60, stale-while-revalidate=120'
+    );
+    return response;
   } catch (error) {
     console.error('Failed to fetch students:', error);
     return NextResponse.json({ error: '학생 목록 조회에 실패했습니다' }, { status: 500 });

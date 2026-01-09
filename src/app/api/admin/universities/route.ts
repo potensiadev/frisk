@@ -114,7 +114,13 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({ universities });
+    // 캐싱 헤더 추가 (5분 캐시, 10분 stale-while-revalidate - 대학교 목록은 자주 변경되지 않음)
+    const response = NextResponse.json({ universities });
+    response.headers.set(
+      'Cache-Control',
+      'private, s-maxage=300, stale-while-revalidate=600'
+    );
+    return response;
   } catch (error) {
     console.error('Failed to fetch universities:', error);
     return NextResponse.json(

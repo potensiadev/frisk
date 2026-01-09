@@ -5,6 +5,17 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   compress: true,
 
+  // 프로덕션 소스맵 비활성화 (번들 크기 감소)
+  productionBrowserSourceMaps: false,
+
+  // 패키지 임포트 최적화 (트리 쉐이킹 개선)
+  experimental: {
+    optimizePackageImports: [
+      '@supabase/supabase-js',
+      '@supabase/ssr',
+    ],
+  },
+
   // Security headers
   async headers() {
     return [
