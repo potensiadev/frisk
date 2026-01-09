@@ -162,12 +162,18 @@ export default function DashboardShell({ user, children }: DashboardShellProps) 
 
         try {
             const supabase = createClient();
-            await supabase.auth.signOut();
-            // 강제로 페이지 이동 (router.push가 안 먹힐 수 있어서 window.location 사용)
+            const { error } = await supabase.auth.signOut();
+
+            if (error) {
+                console.error('Logout error:', error);
+            }
+
+            // 에러가 있더라도 로그인 페이지로 이동
             window.location.href = '/login';
         } catch (error) {
             console.error('Logout failed:', error);
-            setIsLoggingOut(false);
+            // 에러가 있더라도 로그인 페이지로 이동
+            window.location.href = '/login';
         }
     };
 

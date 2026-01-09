@@ -60,90 +60,93 @@ export function UniversityEditForm({ university, contacts: initialContacts, stud
     }
 
     setIsSubmitting(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const supabase = createClient() as any;
 
-    // 1. Update university name
-    if (name.trim() !== university.name) {
-      const { error: uniError } = await supabase
-        .from('universities')
-        .update({ name: name.trim() })
-        .eq('id', university.id);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = createClient() as any;
 
-      if (uniError) {
-        console.error('University update error:', uniError);
-        if (uniError.code === '23505') {
-          setError('이미 등록된 대학교명입니다');
-        } else {
-          setError('대학교 수정에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      // 1. Update university name
+      if (name.trim() !== university.name) {
+        const { error: uniError } = await supabase
+          .from('universities')
+          .update({ name: name.trim() })
+          .eq('id', university.id);
+
+        if (uniError) {
+          console.error('University update error:', uniError);
+          if (uniError.code === '23505') {
+            setError('이미 등록된 대학교명입니다');
+          } else {
+            setError('대학교 수정에 실패했습니다. 잠시 후 다시 시도해주세요.');
+          }
+          return;
         }
-        setIsSubmitting(false);
-        return;
       }
-    }
 
-    // 2. Update contacts
-    // Delete removed contacts
-    const existingIds = initialContacts.map((c) => c.id);
-    const currentIds = validContacts.filter((c) => c.id).map((c) => c.id);
-    const toDelete = existingIds.filter((id) => !currentIds.includes(id));
+      // 2. Update contacts
+      // Delete removed contacts
+      const existingIds = initialContacts.map((c) => c.id);
+      const currentIds = validContacts.filter((c) => c.id).map((c) => c.id);
+      const toDelete = existingIds.filter((id) => !currentIds.includes(id));
 
-    if (toDelete.length > 0) {
-      const { error: deleteError } = await supabase
-        .from('university_contacts')
-        .delete()
-        .in('id', toDelete);
+      if (toDelete.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('university_contacts')
+          .delete()
+          .in('id', toDelete);
 
-      if (deleteError) {
-        console.error('Contact delete error:', deleteError);
-        setError('담당자 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.');
-        setIsSubmitting(false);
-        return;
+        if (deleteError) {
+          console.error('Contact delete error:', deleteError);
+          setError('담당자 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.');
+          return;
+        }
       }
-    }
 
-    // Update existing contacts
-    for (const contact of validContacts.filter((c) => c.id)) {
-      const { error: updateError } = await supabase
-        .from('university_contacts')
-        .update({
-          email: contact.email.trim(),
-          is_primary: contact.is_primary,
-        })
-        .eq('id', contact.id);
+      // Update existing contacts
+      for (const contact of validContacts.filter((c) => c.id)) {
+        const { error: updateError } = await supabase
+          .from('university_contacts')
+          .update({
+            email: contact.email.trim(),
+            is_primary: contact.is_primary,
+          })
+          .eq('id', contact.id);
 
-      if (updateError) {
-        console.error('Contact update error:', updateError);
-        setError('담당자 수정에 실패했습니다. 잠시 후 다시 시도해주세요.');
-        setIsSubmitting(false);
-        return;
+        if (updateError) {
+          console.error('Contact update error:', updateError);
+          setError('담당자 수정에 실패했습니다. 잠시 후 다시 시도해주세요.');
+          return;
+        }
       }
-    }
 
-    // Insert new contacts
-    const newContacts = validContacts.filter((c) => !c.id);
-    if (newContacts.length > 0) {
-      const { error: insertError } = await supabase
-        .from('university_contacts')
-        .insert(
-          newContacts.map((c) => ({
-            university_id: university.id,
-            email: c.email.trim(),
-            is_primary: c.is_primary,
-          }))
-        );
+      // Insert new contacts
+      const newContacts = validContacts.filter((c) => !c.id);
+      if (newContacts.length > 0) {
+        const { error: insertError } = await supabase
+          .from('university_contacts')
+          .insert(
+            newContacts.map((c) => ({
+              university_id: university.id,
+              email: c.email.trim(),
+              is_primary: c.is_primary,
+            }))
+          );
 
-      if (insertError) {
-        console.error('Contact insert error:', insertError);
-        setError('담당자 추가에 실패했습니다. 잠시 후 다시 시도해주세요.');
-        setIsSubmitting(false);
-        return;
+        if (insertError) {
+          console.error('Contact insert error:', insertError);
+          setError('담당자 추가에 실패했습니다. 잠시 후 다시 시도해주세요.');
+          return;
+        }
       }
-    }
 
-    setSuccess('대학교 정보가 수정되었습니다');
-    setIsSubmitting(false);
-    router.refresh();
+      setSuccess('대학교 정보가 수정되었습니다');
+      router.refresh();
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      setError('예상치 못한 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

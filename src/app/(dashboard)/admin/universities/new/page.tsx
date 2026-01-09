@@ -44,49 +44,55 @@ export default function NewUniversityPage() {
     }
 
     setIsSubmitting(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const supabase = createClient() as any;
 
-    // 1. Create university
-    const { data: university, error: uniError } = await supabase
-      .from('universities')
-      .insert({ name: name.trim() })
-      .select()
-      .single();
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = createClient() as any;
 
-    if (uniError) {
-      console.error('University creation error:', uniError);
-      if (uniError.code === '23505') {
-        setError('이미 등록된 대학교명입니다');
-      } else {
-        setError('대학교 등록에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      // 1. Create university
+      const { data: university, error: uniError } = await supabase
+        .from('universities')
+        .insert({ name: name.trim() })
+        .select()
+        .single();
+
+      if (uniError) {
+        console.error('University creation error:', uniError);
+        if (uniError.code === '23505') {
+          setError('이미 등록된 대학교명입니다');
+        } else {
+          setError('대학교 등록에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        }
+        return;
       }
+
+      // 2. Create contacts
+      const contactsToInsert = validContacts.map((c) => ({
+        university_id: university.id,
+        email: c.email.trim(),
+        is_primary: c.is_primary,
+      }));
+
+      const { error: contactError } = await supabase
+        .from('university_contacts')
+        .insert(contactsToInsert);
+
+      if (contactError) {
+        console.error('Contact creation error:', contactError);
+        // Rollback: delete created university
+        await supabase.from('universities').delete().eq('id', university.id);
+        setError('담당자 등록에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        return;
+      }
+
+      router.push('/admin/universities');
+      router.refresh();
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      setError('예상치 못한 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
       setIsSubmitting(false);
-      return;
     }
-
-    // 2. Create contacts
-    const contactsToInsert = validContacts.map((c) => ({
-      university_id: university.id,
-      email: c.email.trim(),
-      is_primary: c.is_primary,
-    }));
-
-    const { error: contactError } = await supabase
-      .from('university_contacts')
-      .insert(contactsToInsert);
-
-    if (contactError) {
-      console.error('Contact creation error:', contactError);
-      // Rollback: delete created university
-      await supabase.from('universities').delete().eq('id', university.id);
-      setError('담당자 등록에 실패했습니다. 잠시 후 다시 시도해주세요.');
-      setIsSubmitting(false);
-      return;
-    }
-
-    router.push('/admin/universities');
-    router.refresh();
   };
 
   return (
